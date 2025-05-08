@@ -1,0 +1,58 @@
+# IDE et système
+.idea/
+.vscode/
+.DS_Store
+*.DS_Store
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.so
+**/*cpython-312.pycx
+**/*cpython-312.pyc
+
+# Dossiers spécifiques
+/dependencies/
+/src/csv_files_data/
+/src/MyoSensor/MyoLinux
+
+
+# Fichiers spécifiques
+src/dart_executable.py
+src/config/config.json
+test.py
+importest.py
+
+# Fichiers CSV
+*.csv
+
+# Environnement virtuel
+venv/
+env/
+.env
+.venv
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+.hypothesis/
+
+# Logs et databases
+*.log
+*.sqlite3
