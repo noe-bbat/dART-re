@@ -1,0 +1,177 @@
+{
+    "documentation": {
+        "general": {
+            "description": "Configuration file for the dARt application sensor system",
+            "version": "1.0"
+        },
+        "wifi_settings": {
+            "description": "Configuration for WiFi module to send sensor data wirelessly",
+            "implementation_status": "This feature has been partially implemented. The configuration structure exists but the complete logic for WiFi data transmission has not been fully implemented yet"
+        },
+        "uuid_services": {
+            "description": "Configuration for Bluetooth UUID services",
+            "grideye_limitation": "Currently, the code in src/GrideyeBluetooth.py is designed to work with a single Grideye sensor and does not support multiple sensors (Grideye_1, Grideye_2, etc.)",
+            "multiple_sensors": {
+                "future_development": "For future implementations with multiple Grideye sensors, developers should follow the pattern implemented in src/ConnectedWoodPlank.py",
+                "reference_implementation": "See the get_connected_wood_plank_uuid function in src/ConnectedWoodPlank.py for an example of handling multiple sensor UUIDs",
+                "naming_convention": "The code can handle identifiers like Connected_Wood_Plank_1 or Connected_Wood_Plank_2 by using the number at the end. However, if amount is set to 1 in devices section, use the single name 'Connected_Wood_Plank'"
+            }
+        },
+        "devices": {
+            "naming_convention": "Sensor declaration varies based on their quantity:",
+            "rules": [
+                "For a single sensor: use simple name (e.g., 'Myo_Sensor')",
+                "For multiple sensors: add a number (e.g., 'Myo_Sensor_1', 'Myo_Sensor_2')",
+                "The 'devices' section declares sensor types and parameters",
+                "The 'ports' section declares connection information"
+            ]
+        },
+        "ports": {
+            "description": "Defines the connection information for each sensor",
+            "naming_rules": [
+                "Must match the amount setting in devices section",
+                "If device amount > 1, use numbered names (e.g., 'Grideye_1', 'Grideye_2')"
+            ]
+        },
+        "directories": {
+            "warning": "Moving these directories will require changes in the code"
+        },
+        "filenames": {
+            "note": "For multiple sensors of the same type, output filename will be appended with a number (e.g., 'Grideye_data.csv' and 'Grideye_data_1.csv')"
+        },
+        "presets": {
+            "status": "This section has been created but not implemented in the code",
+            "customization": "You can add custom presets here and modify the code accordingly"
+        }
+    },
+    "devices": [
+        {
+            "device": "Myo_Sensor",
+            "values_string": "0b",
+            "values": 0,
+            "amount": 1,
+            "active": "false",
+            "live": "false"
+        },
+        {
+            "device": "SEN55",
+            "values_string": "16B",
+            "values": 16,
+            "amount": 1,
+            "active": "false",
+            "live": "false"
+        },
+        {
+            "device": "Grideye",
+            "values_string": "0b",
+            "values": 0,
+            "amount": 1,
+            "active": "false",
+            "live": "true"
+        },
+        {
+            "device": "Connected_Wood_Plank",
+            "values_string": "19b",
+            "values": 0,
+            "amount": 1,
+            "active": "false",
+            "live": "false"
+        },
+        {
+            "device": "MetaWear",
+            "values_string": "0b",
+            "values": 0,
+            "amount": 0,
+            "active": "false",
+            "live": "false"
+        }
+    ],
+    "ports": [
+        {
+            "device": "Myo_Sensor",
+            "port": "53:89:D1:03:96:F7"
+        },
+        {
+            "device": "SEN55",
+            "port": "COM5"
+        },
+        {
+            "device": "Grideye",
+            "port": "/dev/tty.usbmodem11101"
+        },
+        {
+            "device": "Connected_Wood_Plank",
+            "port": "COM6"
+        }
+    ],
+    "directories": {
+        "database": "database_pages",
+        "csv": "csv_files_data",
+        "logs": "logs",
+        "config": "config.json",
+        "myo": "MyoSensor"
+    },
+    "filenames": {
+        "Grideye": "Grideye_data.csv",
+        "SEN55": "SEN55_data.csv",
+        "CWP_SG": "CWP_SG_data.csv",
+        "CWP_Capa": "CWP_Capa_data.csv",
+        "CWP_Piezos": "CWP_Piezos_data.csv"
+    },
+    "presets": [
+        {
+            "name": "default",
+            "Grideye_speed": "2",
+            "CWP_speed": "2",
+            "SEN55_speed": "2"
+        },
+        {
+            "name": "preset1",
+            "Grideye_speed": 1,
+            "CWP_speed": "1",
+            "SEN55_speed": "1"
+        },
+        {
+            "name": "preset2",
+            "Grideye_speed": 3,
+            "CWP_speed": "3",
+            "SEN55_speed": "3"
+        },
+        {
+            "name": "preset3",
+            "Grideye_speed": 4,
+            "CWP_speed": "4",
+            "SEN55_speed": "4"
+        },
+        {
+            "name": "preset4",
+            "Grideye_speed": 1,
+            "CWP_speed": "2",
+            "SEN55_speed": "3"
+        }
+    ],
+    "active_preset": {
+        "value": "preset1"
+    },
+    "Wifi_settings": {
+        "Broadcast_IP": "255.255.255.255",
+        "Port": 5005,
+        "Min_interval": 0.1,
+        "Max_interval": 5
+    },
+    "uuid_services": [
+        {
+            "device": "Grideye",
+            "DEVICE_ADDRESS": "00:13:43:25:04:0D",
+            "SERVICE_UUID": "0783b03e-8535-b5a0-7140-a304d2495cb7",
+            "CHARACTERISTIC_UUID": "0783b03e-8535-b5a0-7140-a304d2495cb8"
+        },
+        {
+            "device": "Connected_Wood_Plank",
+            "SERVICE_UUID": "4fafc201-1fb5-459e-8fcc-c5c9c331914b",
+            "CAPACITIVE_UUID": "beb5483e-36e1-4688-b7f5-ea07361b26a8",
+            "STRAIN_GAUGE_UUID": "cc54f4ce-1037-4b73-9e5a-cdcd53e85145",
+            "PIEZO_UUID": "beb5483e-36e1-4688-b7f5-ea07361b26a9"
+        }
+    ]
+}
