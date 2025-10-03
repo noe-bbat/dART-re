@@ -1,0 +1,10 @@
+/usr/local/lib/libmyolinux.so
+/usr/local/include/myolinux/buffer.h
+/usr/local/include/myolinux/serial.h
+/usr/local/include/myolinux/bleapi.h
+/usr/local/include/myolinux/bled112client.h
+/usr/local/include/myolinux/gattclient.h
+/usr/local/include/myolinux/myoclient.h
+/usr/local/include/myolinux/myoapi.h
+/usr/local/include/myolinux/firstargument.h
+/usr/local/include/myolinux/myolinux.h

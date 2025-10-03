@@ -25,6 +25,11 @@ import logging
 import threading
 import pandas as pd
 import time
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
+
+gauth = GoogleAuth()
+drive = GoogleDrive(gauth)
 
 Main_Path = Path(__file__).parent.resolve()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

@@ -1,0 +1,1 @@
+/usr/bin/c++  --pedantic -rdynamic CMakeFiles/myolinux_example.dir/main.cpp.o -o myolinux_example  -Wl,-rpath,/home/mtu/rasp/latest_dARt/src/MyoSensor/MyoLinux/src libmyolinux.so 

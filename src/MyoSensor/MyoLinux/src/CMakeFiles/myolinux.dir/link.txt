@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC  --pedantic -shared -Wl,-soname,libmyolinux.so -o libmyolinux.so CMakeFiles/myolinux.dir/serial.cpp.o CMakeFiles/myolinux.dir/gattclient.cpp.o CMakeFiles/myolinux.dir/myoclient.cpp.o 
