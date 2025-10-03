@@ -336,7 +336,7 @@ sudo nmcli device wifi connect "your_network_SSID" password "your_network_passwo
 Once done, you should be able to connect to the Raspberry Pi using ssh with the command :
 
 ```bash
-ssh raspberry@raspberry_ip
+ssh raspberry@raspberrypi
 ```
 
 ### 💾 External Storage
