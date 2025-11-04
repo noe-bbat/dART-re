@@ -14,12 +14,24 @@ and persistent storage of sensor readings in CSV format.
 
 import asyncio
 import struct
-from bleak import BleakScanner, BleakClient
+from bleak import BleakScanner, BleakClient, BleakError
 from datetime import datetime
 import logging
 from pathlib import Path
 import threading 
 import pandas as pd 
+from bleak.exc import BleakDBusError
+import signal
+import sys
+import json
+from socket import *
+
+s = socket(AF_INET,SOCK_DGRAM)
+host ="..."
+port = 5012
+buf =1024
+addr = (host,port)
+
 
 Main_Path = Path(__file__).parent.resolve()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -70,14 +82,14 @@ class ConnectedWoodPlank:
             
             self.NUM_CAPACITIVE = 16
             self.NUM_STRAIN = 4
-            self.NUM_PIEZO = 4
+            #self.NUM_PIEZO = 4
             
             self.wifi_transmitter = wifi_transmitter
             self.instance_id = instance_id
             
             self.capacitive_data = {f"capacitive_{i}": [] for i in range(self.NUM_CAPACITIVE)}
             self.strain_data = {f"strain_{i}": [] for i in range(self.NUM_STRAIN)}
-            self.piezo_data = {f"piezo_{i}": [] for i in range(self.NUM_PIEZO)}
+            #self.piezo_data = {f"piezo_{i}": [] for i in range(self.NUM_PIEZO)}
             
             self.DIRECTORY = Main_Path / self.config['directories']['csv']
             
@@ -113,13 +125,114 @@ class ConnectedWoodPlank:
                     self.SERVICE_UUID = device['SERVICE_UUID']
                     self.CAPACITIVE_UUID = device['CAPACITIVE_UUID']
                     self.STRAIN_GAUGE_UUID = device['STRAIN_GAUGE_UUID']
-                    self.PIEZO_UUID = device['PIEZO_UUID']
+                    #self.PIEZO_UUID = device['PIEZO_UUID']
                     return
 
             raise ValueError(f"Device '{target_device}' not found in the configuration")
         except Exception as e:
             logging.error(f"Error getting Connected Wood Plank UUIDs: {str(e)}")
 
+
+    async def discover_services(self, client):
+        """
+        Discover and log available services and characteristics.
+        """
+        try:
+            services = await client.get_services()
+            logging.info("Services discovered:")
+            for service in services:
+                logging.info(f"Service: {service.uuid}")
+                for char in service.characteristics:
+                    logging.info(f"  Characteristic: {char.uuid} - Properties: {char.properties}")
+        except Exception as e:
+            logging.error(f"Error discovering services: {e}")
+    
+    async def check_characteristic_properties(self, client, uuid, characteristic_name):
+        """
+        Check if a characteristic supports notifications.
+        """
+        try:
+            service = client.services.get_service(self.SERVICE_UUID)
+            if service:
+                characteristic = service.get_characteristic(uuid)
+                if characteristic:
+                    if "notify" in characteristic.properties:
+                        return True
+                    else:
+                        logging.warning(f"{characteristic_name} characteristic does not support notifications")
+                        return False
+            logging.warning(f"{characteristic_name} characteristic not found")
+            return False
+        except Exception as e:
+            logging.error(f"Error checking {characteristic_name} properties: {e}")
+            return False
+
+    async def enable_notifications_safely(self, client):
+        """
+        Safely enable notifications with fallback to polling if needed.
+        """
+        self.use_polling = {
+            'capacitive': False,
+            'strain': False,
+            'piezo': False
+        }
+
+        # Check capacitive
+        if await self.check_characteristic_properties(client, self.CAPACITIVE_UUID, "Capacitive"):
+            try:
+                await client.start_notify(self.CAPACITIVE_UUID, self.parse_capacitive)
+                logging.info("Capacitive notifications enabled")
+            except BleakDBusError as e:
+                logging.warning(f"Capacitive notifications failed, using polling: {e}")
+                self.use_polling['capacitive'] = True
+        else:
+            self.use_polling['capacitive'] = True
+
+        # Check strain gauge
+        if await self.check_characteristic_properties(client, self.STRAIN_GAUGE_UUID, "Strain Gauge"):
+            try:
+                await client.start_notify(self.STRAIN_GAUGE_UUID, self.parse_strain_gauge)
+                logging.info("Strain gauge notifications enabled")
+            except BleakDBusError as e:
+                logging.warning(f"Strain gauge notifications failed, using polling: {e}")
+                self.use_polling['strain'] = True
+        else:
+            self.use_polling['strain'] = True
+
+        # Check piezo
+        """if await self.check_characteristic_properties(client, self.PIEZO_UUID, "Piezo"):
+            try:
+                await client.start_notify(self.PIEZO_UUID, self.parse_piezo)
+                logging.info("Piezo notifications enabled")
+            except BleakDBusError as e:
+                logging.warning(f"Piezo notifications failed, using polling: {e}")
+                self.use_polling['piezo'] = True
+        else:
+            self.use_polling['piezo'] = True"""
+
+
+    async def poll_sensors(self, client):
+        """
+        Poll sensors if notifications are not available.
+        """
+        while self.connected and not self.stop_event.is_set():
+            try:
+                if self.use_polling['capacitive']:
+                    data = await client.read_gatt_char(self.CAPACITIVE_UUID)
+                    self.parse_capacitive(None, data)
+                
+                if self.use_polling['strain']:
+                    data = await client.read_gatt_char(self.STRAIN_GAUGE_UUID)
+                    self.parse_strain_gauge(None, data)
+                
+                """if self.use_polling['piezo']:
+                    data = await client.read_gatt_char(self.PIEZO_UUID)
+                    self.parse_piezo(None, data)"""
+                
+                await asyncio.sleep(0.1)  # 10Hz polling
+            except Exception as e:
+                logging.error(f"Error polling sensors: {e}")
+                break
     def parse_capacitive(self, sender, data):
         """
         Parse capacitive sensor data from BLE notification.
@@ -142,6 +255,9 @@ class ConnectedWoodPlank:
             for i in range(self.NUM_CAPACITIVE):
                 value = struct.unpack_from('<H', data, offset=1+i*2)[0]
                 self.capacitive_data[f"capacitive_{i}"].append((timestamp, value))
+             host = self.config["Wifi_settings"]["Local_adress"]
+             addr = (host,port)
+             s.sendto(bytes("CAP ","utf-8") + bytes(str(self.capacitive_data[f"capacitive_{i}"]),"utf-8"),addr)
             logging.info("Capacitive data received")
         except Exception as e:
             logging.error(f"Error parsing capacitive data: {str(e)}")
@@ -168,12 +284,20 @@ class ConnectedWoodPlank:
             for i in range(self.NUM_STRAIN):
                 value = data[i+1]
                 self.strain_data[f"strain_{i}"].append((timestamp, value))
+                host = self.config["Wifi_settings"]["Local_adress"]
+                addr = (host,port)
+                #data_to_send = bytes(str(value), 'utf-8')
+                s.sendto(bytes("STR ","utf-8") + bytes(str(value),"utf-8"),addr)
+                logging.info(str(value))
+                if self.wifi_transmitter:
+                                            #latest_data = self.get_latest_data()
+                                            self.wifi_transmitter.update(value)
             logging.info("Strain gauge data received")
         except Exception as e:
             logging.error(f"Error parsing strain gauge data: {str(e)}")
 
-    def parse_piezo(self, sender, data):
-        """
+    """def parse_piezo(self, sender, data):
+        ""
         Parse piezoelectric sensor data from BLE notification.
 
         Processes raw data from piezo sensors, expecting:
@@ -184,7 +308,7 @@ class ConnectedWoodPlank:
         Args:
             sender: BLE notification sender
             data: Raw byte array containing sensor readings
-        """
+        ""
         try:
             if data[0] != ord('-') or data[1] != ord('>') or data[-2] != ord('<') or data[-1] != ord('-'):
                 logging.error("Invalid start/end symbols for piezoelectric data")
@@ -194,10 +318,14 @@ class ConnectedWoodPlank:
             for i in range(self.NUM_PIEZO):
                 value = struct.unpack_from('>H', data, offset=2+i*2)[0]
                 self.piezo_data[f"piezo_{i}"].append((timestamp, value))
+                host = Main_Path / self.config["Wifi_settings"]["Local_adress"]
+                addr = (host,port)
+                data_to_send = bytes(str(data), 'utf-8')
+                s.sendto(data_to_send,addr)
             logging.info("Piezoelectric data received")
         except Exception as e:
             logging.error(f"Error parsing piezoelectric data: {str(e)}")
-
+"""
     async def run(self):
         """
         Main asynchronous operation loop.
@@ -211,10 +339,11 @@ class ConnectedWoodPlank:
 
         Raises:
             ConnectedWoodPlankError: If data collection process fails
+        
         """
         try:
             device = await BleakScanner.find_device_by_filter(
-                lambda d, ad: self.SERVICE_UUID.lower() in ad.service_uuids
+                lambda d, ad: self.SERVICE_UUID.lower() in ad.service_uuids, timeout = 25
             )
 
             if not device:
@@ -222,13 +351,11 @@ class ConnectedWoodPlank:
                 return
 
             logging.info(f"Device found: {device.name}")
-
-            async with BleakClient(device) as client:
+            async with BleakClient(device, timeout=30.0) as client:
                 logging.info(f"Connected to: {device.name}")
-
                 await client.start_notify(self.CAPACITIVE_UUID, self.parse_capacitive)
                 await client.start_notify(self.STRAIN_GAUGE_UUID, self.parse_strain_gauge)
-                await client.start_notify(self.PIEZO_UUID, self.parse_piezo)
+                #await client.start_notify(self.PIEZO_UUID, self.parse_piezo)
 
                 logging.info("Notifications enabled, waiting for data...")
                 
@@ -237,11 +364,84 @@ class ConnectedWoodPlank:
 
                 await client.stop_notify(self.CAPACITIVE_UUID)
                 await client.stop_notify(self.STRAIN_GAUGE_UUID)
-                await client.stop_notify(self.PIEZO_UUID)
+                #await client.stop_notify(self.PIEZO_UUID)
         except Exception as e:
             logging.error(f"Error in CWP data collection: {str(e)}")
             raise ConnectedWoodPlankError("CWP data collection error")
+        """
+        max_retries = 20
+        retry_count = 0
+        
+        while retry_count < max_retries and not self.stop_event.is_set():
+            try:
+                device = await BleakScanner.find_device_by_filter(
+                    lambda d, ad: self.SERVICE_UUID.lower() in (ad.service_uuids or []),
+                    timeout=30.0
+                )
+                logging.info(f"Step 1 pass")
+                if not device:
+                    logging.error(f"No device found with service UUID {self.SERVICE_UUID}")
+                    retry_count += 1
+                    await asyncio.sleep(2)
+                    continue
 
+                logging.info(f"Device found: {device.name}")
+
+                async with BleakClient(device, timeout=30.0) as client:
+                    self.client = client
+                    logging.info(f"Step 2 pass")
+                    self.connected = True
+                    logging.info(f"Connected to: {device.name}")
+
+                    # Discover services for debugging
+                    await self.discover_services(client)
+                    
+                    # Enable notifications safely
+                    await self.enable_notifications_safely(client)
+                    
+                    logging.info("Data collection started...")
+                    
+                    # Start polling if needed
+                    polling_task = None
+                    if any(self.use_polling.values()):
+                        polling_task = asyncio.create_task(self.poll_sensors(client))
+                    
+                    # Main loop
+                    while not self.stop_event.is_set() and self.connected:
+                        await asyncio.sleep(1)
+                        
+                    # Cleanup
+                    if polling_task:
+                        polling_task.cancel()
+                    
+                    # Stop notifications
+                    try:
+                        if not self.use_polling['capacitive']:
+                            await client.stop_notify(self.CAPACITIVE_UUID)
+                        if not self.use_polling['strain']:
+                            await client.stop_notify(self.STRAIN_GAUGE_UUID)
+                        if not self.use_polling['piezo']:
+                            await client.stop_notify(self.PIEZO_UUID)
+                    except Exception as e:
+                        logging.error(f"Error stopping notifications: {e}")
+                    
+                    break  # Success, break out of retry loop
+
+            except BleakError as e:
+                logging.error(f"BLE error (attempt {retry_count + 1}/{max_retries}): {e}")
+                retry_count += 1
+                await asyncio.sleep(2)
+            except Exception as e:
+                logging.error(f"Unexpected error in CWP data collection: {str(e)}")
+                retry_count += 1
+                await asyncio.sleep(2)
+        
+        self.connected = False
+        self.client = None
+        
+        if retry_count >= max_retries:
+            logging.error("Failed to connect after multiple attempts")
+            raise ConnectedWoodPlankError("CWP data collection error")"""
     def start_recording(self):
         """
         Begin data recording session.
@@ -303,7 +503,7 @@ class ConnectedWoodPlank:
 
             for data, base_filename in [
                 (self.capacitive_data, "CWP_Capa_data"),
-                (self.piezo_data, "CWP_Piezos_data"),
+                #(self.piezo_data, "CWP_Piezos_data"),
                 (self.strain_data, "CWP_SG_data")
             ]:
                 if data:
@@ -334,4 +534,7 @@ class ConnectedWoodPlank:
         Executes the main run() method in an asyncio context.
         Used by the recording thread for asynchronous operation.
         """
-        asyncio.run(self.run())
+        try:
+            asyncio.run(self.run())
+        except Exception as e:
+            logging.error(f"Error in asyncio loop: {e}")

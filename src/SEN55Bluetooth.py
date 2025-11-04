@@ -22,6 +22,16 @@ import os
 import logging
 from pathlib import Path
 import threading
+import signal
+import sys
+import json
+from socket import *
+
+s = socket(AF_INET,SOCK_DGRAM)
+host ="..."
+port = 5022
+buf =1024
+addr = (host,port)
 
 Main_path = Path(__file__).parents[0]
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -139,8 +149,10 @@ class SEN55Bluetooth:
         """
         try:
             if self.running.is_set():
+                time.sleep(3)
                 self.sen55_data_to_csv()
                 logging.info("Data saved to CSV.")
+                self.SEN55_data.clear()
                 self.running.clear()
                 if self.thread:
                     self.thread.join(timeout=5)
@@ -172,7 +184,7 @@ class SEN55Bluetooth:
                 logging.info("Starting to listen...")
 
                 async def detection_callback(device, advertising_data):
-                   if device.name in available_devices:
+                    if device.name in available_devices:
                         if self.ConfigClass.get_status(device.name):
                             manufacturer_data = advertising_data.manufacturer_data
                             if manufacturer_data:
@@ -182,19 +194,32 @@ class SEN55Bluetooth:
                                     if len(data) >= data_size:
                                         values = struct.unpack(self.ConfigClass.get_values_string(device.name), data[:data_size])
                                         logging.debug(', '.join(str(value) for value in values))
+                                        #s.sendto(bytes(values),addr)
                                         
                                         if device.name == "SEN55":
                                             self.latest_successful_read = time.time()
                                             self.SEN55_data_to_array(values)
+                                            #self.sen55_data_to_csv()
+                                            #s.sendto(bytes(values),addr)
+                                            #print("Ici ça passe")
+                                            #print(host)
+         
+                                            #s.sendto(bytes(data_dict,"utf-8"),addr)
                                             
                                         if self.wifi_transmitter:
                                             latest_data = self.get_latest_data()
                                             self.wifi_transmitter.update(latest_data)
+                                            print("On est la")
+                                            host = self.config["Wifi_settings"]["Local_adress"]
+                                            addr = (host,port)
+                                            s.sendto(bytes(str(json.dumps(latest_data)),"utf-8"),addr)
+                                            #self.sen55_data_to_csv()
 
                 scanner = BleakScanner(detection_callback=detection_callback)
                 await scanner.start()
                 await asyncio.sleep(20)  # Run for 20 seconds
                 await scanner.stop()
+               # self.sen55_data_to_csv()
 
             except Exception as e:
                 logging.error(f"Error while listening for devices: {str(e)}")
@@ -211,20 +236,7 @@ class SEN55Bluetooth:
     
     def SEN55_data_to_array(self, values):
         """
-        Process raw sensor data.
-
-        Parses and stores sensor readings with timestamps:
-            - PM1.0, PM2.5, PM10 concentrations
-            - Temperature readings
-            - Humidity level
-            - VOC index
-            - NOx concentration
-
-        Args:
-            values: Tuple of raw sensor readings
-
-        Raises:
-            SEN55BluetoothError: If data parsing fails
+        Process raw sensor data with proper byte reconstruction.
         """
         try:
             # Reconstruct decimal values from byte pairs
@@ -234,8 +246,9 @@ class SEN55Bluetooth:
             temperature = values[10] + values[11]/100.0  # This matches Arduino's byte packing
             humidity = values[8] + values[9]/100.0
             voc = values[12] + values[13]/100.0
-            nox = values[14] + values[15]/100.0
-
+            nox = values[14] + values[15]/100
+            #host=self.config["Wifi_settings"]["Local_adress"]
+            #addr=(host,port)
             self.SEN55_data.append({
                 "time": self.current_time,
                 "Pm1p0": pm1p0,
@@ -246,9 +259,10 @@ class SEN55Bluetooth:
                 "VOC": voc,
                 "NOx": nox
             })
-            
+
+        
             logging.debug(f"Reconstructed values - Temp: {temperature}°C, Humidity: {humidity}%")
-            
+        
         except IndexError as e:
             logging.error(f"Error processing SEN55 data: {str(e)}")
             raise SEN55BluetoothError("Invalid SEN55 data format")

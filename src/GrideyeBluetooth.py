@@ -4,7 +4,7 @@ GridEYE Bluetooth Interface Module
 
 This module provides Bluetooth Low Energy (BLE) communication capabilities for the GridEYE thermal sensor.
 It handles device connection, data acquisition, processing, and storage of thermal data.
-
+:
 The module implements a robust connection mechanism with automatic reconnection and data validation.
 Temperature data is processed in real-time and can be saved to CSV files for further analysis.
 
@@ -27,16 +27,23 @@ import pandas as pd
 import time
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
-
-gauth = GoogleAuth()
-drive = GoogleDrive(gauth)
-
 Main_Path = Path(__file__).parent.resolve()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+gauth = GoogleAuth()
+drive = GoogleDrive(gauth)
+import socket
+import re
+import sys
+import select
 import config.configuration as Conf
-
+from socket import *
 HEADER = bytes.fromhex("2a2a2a")  # Fixed header to look for
+
+host = "..."
+port = 5006
+addr = (host,port)
+MESSAGE = "Accord"
+s = socket(AF_INET,SOCK_DGRAM)
 
 class GridEYEConfigError(Exception):
     """
@@ -104,10 +111,9 @@ class GridEYEReader:
         self.instance_id = instance_id 
         self.init_bluetooth_config()
         
-        self.csv_directory = Main_Path / self.config["directories"]["csv"]
+        self.csv_directory = Main_Path/self.config["directories"]["csv"]
         self.csv_filename = self.config["filenames"]["Grideye"]
         self.csv_path = self.csv_directory / self.csv_filename
-        
         self.running = threading.Event()
         self.stop_event = asyncio.Event()
         self.thread = None
@@ -183,6 +189,12 @@ class GridEYEReader:
         try:
             if self.running.is_set():
                 self.send_data_to_csv()
+
+                #gfile = drive.CreateFile({'parent':[{'id': '1SqJYbH3k1Kq8tirwlIvDtaBFWpa5lBA_'}]})
+                #gfile.SetContentFile(self.csv_path)
+                #gfile.Upload() # Upload the file.
+
+                self.data_records.clear()
                 self.running.clear()
                 self.stop_event.set()
                 
@@ -285,6 +297,14 @@ class GridEYEReader:
                 if end_marker == bytes.fromhex("0d0a"):
                     self.parse_frame(frame_data)
                     self.add_data_record()
+                    self.send_data_to_csv()
+                    #print("UDP target IP:", UDP_IP)
+                    #print("UDP target port:", UDP_PORT)
+                    #print("Accord:", self.csv_path)
+                    host = self.config["Wifi_settings"]["Local_adress"]
+                    addr=(host,port)
+                    #sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+                    s.sendto(frame_data, addr)
 
                 self.buffer = self.buffer[frame_start + 128 + 2:]
         except Exception as e:
@@ -334,6 +354,7 @@ class GridEYEReader:
             'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
             'temperatures': self.temperatures.flatten().tolist()
         }
+        #s.sendto(record,addr)
         self.data_records.append(record)
 
     def send_data_to_csv(self):
@@ -352,6 +373,7 @@ class GridEYEReader:
 
         try:
             df = pd.DataFrame(self.data_records)
+            #s.sendto(bytes(df),addr)
             base_filename = self.csv_filename[:-4]
             sensor_amount = self.ConfigClass.get_sensor_amount("Grideye")
 
@@ -361,8 +383,7 @@ class GridEYEReader:
                 new_filename = self.csv_filename
                 
             new_filepath = self.csv_directory / new_filename
-            df.to_csv(new_filepath, index=False)
-            logging.info(f"Data saved to {new_filename}")
-            self.data_records.clear()
+            df.to_csv(new_filepath, index = False)
+            logging.debug(f"Data saved to {new_filepath}")
         except Exception as e:
             raise GridEYEDataSavingError(f"Error in saving GridEYE data to CSV: {str(e)}")
