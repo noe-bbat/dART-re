@@ -26,11 +26,14 @@ import sys
 import json
 from socket import *
 
+# Create a UDP socket (SOCK_DGRAM)
+# UDP is connectionless, faster but less reliable than TCP
 s = socket(AF_INET,SOCK_DGRAM)
-host ="..."
-port = 5012
-buf =1024
-addr = (host,port)
+# Initial connection variables definition
+ost = "..."  # Server IP address (will be overwritten later)
+port = 5022   # Destination port
+buf = 1024    # Buffer size for reception (not used here)
+addr = (host, port)  # Tuple (address, port) for destination
 
 
 Main_Path = Path(__file__).parent.resolve()
@@ -255,9 +258,10 @@ class ConnectedWoodPlank:
             for i in range(self.NUM_CAPACITIVE):
                 value = struct.unpack_from('<H', data, offset=1+i*2)[0]
                 self.capacitive_data[f"capacitive_{i}"].append((timestamp, value))
-             host = self.config["Wifi_settings"]["Local_adress"]
-             addr = (host,port)
-             s.sendto(bytes("CAP ","utf-8") + bytes(str(self.capacitive_data[f"capacitive_{i}"]),"utf-8"),addr)
+             host = self.config["Wifi_settings"]["Local_adress"]  # Get address from config
+             addr = (host, port)  # Redefine destination address
+            # Send data via UDP
+            s.sendto(bytes("CAP ","utf-8") + bytes(str(self.capacitive_data[f"capacitive_{i}"]),"utf-8"),addr)
             logging.info("Capacitive data received")
         except Exception as e:
             logging.error(f"Error parsing capacitive data: {str(e)}")
@@ -284,8 +288,8 @@ class ConnectedWoodPlank:
             for i in range(self.NUM_STRAIN):
                 value = data[i+1]
                 self.strain_data[f"strain_{i}"].append((timestamp, value))
-                host = self.config["Wifi_settings"]["Local_adress"]
-                addr = (host,port)
+                host = self.config["Wifi_settings"]["Local_adress"]  # Get address from config
+                addr = (host, port)  # Redefine destination address
                 #data_to_send = bytes(str(value), 'utf-8')
                 s.sendto(bytes("STR ","utf-8") + bytes(str(value),"utf-8"),addr)
                 logging.info(str(value))
