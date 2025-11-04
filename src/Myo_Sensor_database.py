@@ -24,11 +24,15 @@ import time
 
 from socket import *
 
+
+# Create a UDP socket (SOCK_DGRAM)
+# UDP is connectionless, faster but less reliable than TCP
 s = socket(AF_INET,SOCK_DGRAM)
-host ="..."
-port = 5010
-buf =2048
-addr = (host,port)
+# Initial connection variables definition
+host = "..."  # Server IP address (will be overwritten later)
+port = 5022   # Destination port
+buf = 1024    # Buffer size for reception (not used here)
+addr = (host, port)  # Tuple (address, port) for destination
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -121,12 +125,13 @@ class MyoSensorDatabase:
                 st.subheader("Get real time data on TouchDesigner")
                 while (1):
                      if (csv_file):
-                         host=self.config["Wifi_settings"]["Local_adress"]
-                         addr=(host,port)
+                         host = self.config["Wifi_settings"]["Local_adress"]  # Get address from config
+                         addr = (host, port)  # Redefine destination address
                          try:
                              df = pd.read_csv(csv_file)
                              last_row = df.iloc[-1]  # Dernière ligne comme Series pandas
                              # Convertir en format approprié pour l'envoi
+                             # Send data via UDP
                              data_to_send = bytes(last_row.to_csv(index=False, header=False).strip(), 'utf-8')
                              s.sendto(data_to_send, addr)
                              #print("Data send via UDP")
