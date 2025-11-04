@@ -27,7 +27,9 @@ import sys
 import json
 from socket import *
 
+# Create a UDP socket (SOCK_DGRAM)
 s = socket(AF_INET,SOCK_DGRAM)
+# Initial connection variables definition
 host ="..."
 port = 5022
 buf =1024
@@ -209,9 +211,10 @@ class SEN55Bluetooth:
                                         if self.wifi_transmitter:
                                             latest_data = self.get_latest_data()
                                             self.wifi_transmitter.update(latest_data)
-                                            print("On est la")
-                                            host = self.config["Wifi_settings"]["Local_adress"]
-                                            addr = (host,port)
+                                            host = self.config["Wifi_settings"]["Local_adress"] # Get address from config
+                                            addr = (host, port)  # Redefine destination address
+                                            # Send data via UDP
+                                            # Converts data to JSON → to bytes → sends via UDP
                                             s.sendto(bytes(str(json.dumps(latest_data)),"utf-8"),addr)
                                             #self.sen55_data_to_csv()
 
